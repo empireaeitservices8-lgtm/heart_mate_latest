@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "455143541589",
+    "project_id": "heartmate-ed4c7",
+    "storage_bucket": "heartmate-ed4c7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:455143541589:android:d8b268d6ec164da5e4bddc",
+        "android_client_info": {
+          "package_name": "com.heartmate.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyW-ERp53HgWEQbaCpfUATO_Ch2whot6k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

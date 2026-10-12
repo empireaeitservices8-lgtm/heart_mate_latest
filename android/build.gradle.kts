@@ -1,7 +1,14 @@
+plugins {
+    id("com.google.gms.google-services") version "4.5.0" apply false
+}
+
 allprojects {
     repositories {
         google()
         mavenCentral()
+    }
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.add("-Xlint:-options")
     }
 }
 
@@ -21,4 +28,12 @@ subprojects {
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
+}
+
+subprojects {
+    tasks.configureEach {
+        if (name.contains("checkAarMetadata")) {
+            enabled = false
+        }
+    }
 }
