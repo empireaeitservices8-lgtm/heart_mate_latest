@@ -20,7 +20,12 @@ class SplashViewModel extends ViewModel {
       final token = await SpHelper.getString(SpHelper.keyToken);
 
       if (token != null && token.isNotEmpty) {
-        _targetRoute = AppRoutes.dashboard;
+        final isAgent = await SpHelper.getIsAgent();
+        if (isAgent) {
+          _targetRoute = AppRoutes.agentDashboard;
+        } else {
+          _targetRoute = AppRoutes.dashboard;
+        }
       } else {
         _targetRoute = AppRoutes.login;
       }

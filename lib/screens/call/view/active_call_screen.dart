@@ -52,7 +52,7 @@ class _ActiveCallScreenState extends State<ActiveCallScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _waveController.dispose();
-    if (_callVM.status == CallStatus.ended || _callVM.status == CallStatus.cancelled) {
+    if (!_callVM.isCallActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _callVM.resetToIdle();
       });
@@ -86,27 +86,19 @@ class _ActiveCallScreenState extends State<ActiveCallScreen>
         }
       });
     } else if (callVM.status == CallStatus.remoteLeft && !_isNavigatingAway) {
-      if (callVM.remoteOfflineReason == 'quit') {
-        _isNavigatingAway = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted && callVM.status == CallStatus.remoteLeft) {
-              callVM.resetToIdle();
+      _isNavigatingAway = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            callVM.resetToIdle();
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacementNamed(context, '/home');
             }
-          });
+          }
         });
-      } else if (callVM.remoteOfflineReason == 'dropped') {
-        if (!callVM.isJoined) {
-          _isNavigatingAway = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted && callVM.status == CallStatus.remoteLeft) {
-                callVM.resetToIdle();
-              }
-            });
-          });
-        }
-      }
+      });
     }
 
     if (session == null) {

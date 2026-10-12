@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../theme/app_theme.dart';
 import '../view_model/signup_viewmodel.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../helpers/sp_helper.dart';
 
 class GoogleAuthContinueScreen extends StatefulWidget {
   const GoogleAuthContinueScreen({super.key});
@@ -56,8 +57,13 @@ class _GoogleAuthContinueScreenState extends State<GoogleAuthContinueScreen> {
         );
         viewModel.fetchProfile();
         viewModel.fetchCoins();
-        await PermissionService.requestAppPermissions();
-        navigator.pushReplacementNamed('/home');
+        final isAgent = await SpHelper.getIsAgent() || viewModel.isAgentMode;
+        if (isAgent) {
+          navigator.pushReplacementNamed('/agent-dashboard');
+        } else {
+          await PermissionService.requestAppPermissions();
+          navigator.pushReplacementNamed('/home');
+        }
       } else {
         if (viewModel.errorMessage != null) {
           scaffoldMessenger.showSnackBar(
@@ -182,7 +188,7 @@ class _GoogleAuthContinueScreenState extends State<GoogleAuthContinueScreen> {
                           : () => _handleGoogleSignIn(context, viewModel),
                       icon: viewModel.isLoading
                           ? const SizedBox.shrink()
-                          : const Icon(
+                          : const FaIcon(
                               FontAwesomeIcons.google,
                               color: Colors.black87,
                               size: 18,

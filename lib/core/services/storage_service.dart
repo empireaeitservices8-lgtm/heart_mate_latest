@@ -4,6 +4,19 @@ class StorageService {
   static const String _keyToken = 'auth_token';
   static const String _keyIsLogged = 'is_logged';
   static const String _keyFcmToken = 'fcm_token';
+  static const String _keyUsername = 'username';
+
+  // Save username
+  Future<bool> saveUsername(String username) async {
+    final prefs = await SharedPreferences.getInstance();
+    return await prefs.setString(_keyUsername, username);
+  }
+
+  // Get username
+  Future<String?> getUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyUsername);
+  }
 
   // Save FCM token
   Future<bool> saveFcmToken(String token) async {

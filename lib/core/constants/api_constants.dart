@@ -12,6 +12,7 @@ class ApiConstants {
   static const String addCoinsEndpoint = '$baseUrl/coins/add/';
   static const String offersEndpoint = '$baseUrl/offers/';
   static const String usersEndpoint = '$baseUrl/users/';
+  static const String agentsEndpoint = '$baseUrl/agents/';
   static const String onlineUsersEndpoint = '$baseUrl/online-users/';
   static const String updateStatusEndpoint = '$baseUrl/update-status/';
   static const String googleAuthEndpoint = '$baseUrl/google-auth/';
@@ -23,6 +24,7 @@ class ApiConstants {
   static const String coinPackagesEndpoint = '$baseUrl/coins/packages/';
   static const String createPaymentOrderEndpoint = '$baseUrl/payment/order/';
   static const String verifyPaymentEndpoint = '$baseUrl/payment/verify/';
-  static const String coinTransactionsEndpoint = '$baseUrl/coins/transactions/';
+  static const String agentWithdrawEndpoint = '$baseUrl/agent/withdraw/';
+  static const String agentWithdrawalsHistoryEndpoint = '$baseUrl/agent/withdrawals/';
 }
 

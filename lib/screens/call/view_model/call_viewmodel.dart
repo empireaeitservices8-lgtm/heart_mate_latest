@@ -19,6 +19,13 @@ class CallViewModel extends ChangeNotifier {
   CallStatus _status = CallStatus.idle;
   CallStatus get status => _status;
 
+  bool get isCallActive =>
+      _status == CallStatus.incoming ||
+      _status == CallStatus.accepting ||
+      _status == CallStatus.outgoing ||
+      _status == CallStatus.ringing ||
+      _status == CallStatus.connected;
+
   CallSession? _currentSession;
   CallSession? get currentSession => _currentSession;
 
@@ -178,14 +185,21 @@ class CallViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> handleCallCancelled({required int callId}) async {
+  Future<void> handleCallCancelled({required int callId, bool isRejected = false}) async {
     if (_isLeavingIntentionally) return;
     _isLeavingIntentionally = true;
 
-    print('[Agora Call] Call $callId cancelled by remote caller or backend.');
-    _cancelledCallIds.add(callId);
-    await FlutterCallkitIncoming.endCall(callId.toString());
-    if (_currentSession != null && _currentSession!.callId == callId) {
+    print('[Agora Call] Call $callId ${isRejected ? "rejected" : "cancelled"} by remote party or backend.');
+    if (callId != 0) {
+      _cancelledCallIds.add(callId);
+      await FlutterCallkitIncoming.endCall(callId.toString());
+    }
+
+    if (_currentSession != null &&
+        (_currentSession!.callId == null ||
+         _currentSession!.callId == 0 ||
+         _currentSession!.callId == callId ||
+         callId == 0)) {
       _ringTimeoutTimer?.cancel();
       stopPollingCallStatus();
       _simTimer?.cancel();
@@ -193,7 +207,7 @@ class CallViewModel extends ChangeNotifier {
 
       await _safeReleaseAgoraEngine();
 
-      _status = CallStatus.cancelled;
+      _status = isRejected ? CallStatus.rejected : CallStatus.cancelled;
       _isLeavingIntentionally = false;
       notifyListeners();
     } else {
@@ -222,7 +236,35 @@ class CallViewModel extends ChangeNotifier {
   Future<String?> checkCallStatus(int callId) async {
     try {
       final data = await _appRepository.getCallStatus(callId);
-      return (data['status'] ?? data['message']) as String?;
+      final dynamic rawStatus = data['status'];
+      final dynamic rawMessage = data['message'];
+
+      String combined = '';
+      if (rawStatus != null && rawStatus.toString().isNotEmpty) {
+        combined = rawStatus.toString().toLowerCase().trim();
+      } else if (rawMessage != null && rawMessage.toString().isNotEmpty) {
+        combined = rawMessage.toString().toLowerCase().trim();
+      }
+
+      if (combined.contains('completed') || combined.contains('ended') || combined.contains('closed')) {
+        return 'completed';
+      }
+      if (combined.contains('cancelled') || combined.contains('cancel')) {
+        return 'cancelled';
+      }
+      if (combined.contains('rejected') || combined.contains('decline') || combined.contains('declined')) {
+        return 'rejected';
+      }
+      if (combined.contains('missed')) {
+        return 'missed';
+      }
+      if (combined.contains('accepted') || combined.contains('connected')) {
+        return 'accepted';
+      }
+      if (combined.contains('initiated') || combined.contains('ringing')) {
+        return 'initiated';
+      }
+      return combined.isNotEmpty ? combined : null;
     } catch (e) {
       print('Error checking call status: $e');
     }
@@ -234,14 +276,14 @@ class CallViewModel extends ChangeNotifier {
     _isPollingStatus = true;
  
     _statusPollTimer?.cancel();
-    _statusPollTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+    _statusPollTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
       if (_currentSession == null || _status == CallStatus.idle) {
         stopPollingCallStatus();
         return;
       }
  
       final currentCallId = _currentSession!.callId;
-      if (currentCallId == null || currentCallId != callId) {
+      if (currentCallId == null || (currentCallId != callId && currentCallId != 0)) {
         stopPollingCallStatus();
         return;
       }
@@ -260,16 +302,11 @@ class CallViewModel extends ChangeNotifier {
                  backendStatus == 'missed' ||
                  backendStatus == 'completed') {
         stopPollingCallStatus();
-        if (backendStatus == 'cancelled') {
-          handleCallCancelled(callId: callId);
-        } else if (_status == CallStatus.connected) {
+        if (_status == CallStatus.connected) {
           hangUp(signupVM);
         } else {
-          if (_currentSession!.role == CallRole.caller) {
-            hangUp(signupVM);
-          } else {
-            declineCall();
-          }
+          final isRejected = backendStatus == 'rejected' || backendStatus == 'missed';
+          handleCallCancelled(callId: callId, isRejected: isRejected);
         }
       }
     });
@@ -444,7 +481,12 @@ class CallViewModel extends ChangeNotifier {
     int? callId;
     try {
       final String callTypeStr = (type == CallType.video) ? 'video' : 'audio';
-      final apiResponse = await _appRepository.initiateCall(contactIdInt, callTypeStr);
+      final String? loggedInUsername = signupVM.profile?.username;
+      final apiResponse = await _appRepository.initiateCall(
+        contactIdInt,
+        callTypeStr,
+        username: loggedInUsername,
+      );
       channelId = apiResponse.channelName;
       agoraToken = apiResponse.token;
       agoraUid = apiResponse.uid;
@@ -518,7 +560,10 @@ class CallViewModel extends ChangeNotifier {
 
   // Receive simulated inbound call
   void receiveSimulatedCall(UserListing contact, CallType type) {
-    if (_status != CallStatus.idle) return;
+    if (isCallActive) return;
+    if (_status != CallStatus.idle) {
+      resetToIdle();
+    }
 
     _status = CallStatus.incoming;
     _isMockMode = true;
@@ -552,9 +597,14 @@ class CallViewModel extends ChangeNotifier {
     required CallType type,
     required SignUpViewModel signupVM,
   }) {
-    if (_status != CallStatus.idle) {
-      print('[Agora Call] Incoming call $callId ignored: current status is $_status');
+    if (_status == CallStatus.connected || _status == CallStatus.accepting) {
+      print('[Agora Call] Incoming call $callId ignored: already connected in call $_status');
       return;
+    }
+
+    // Reset any previous non-connected session before handling incoming call
+    if (_status != CallStatus.idle) {
+      resetToIdle();
     }
 
     print('[Agora Call] Incoming call received -> ID: $callId, Caller ID: ${caller.id} (${caller.name}), Channel: $channelId, Type: $type');
@@ -690,6 +740,7 @@ class CallViewModel extends ChangeNotifier {
 
       print('[Agora Call] Channel "$channelName" joined successfully. Connecting call state.');
       _connectCall(signupVM);
+      startPollingCallStatus(callId, signupVM);
       return true;
     } catch (e) {
       print('[Agora Call] Error accepting call: $e');
@@ -760,9 +811,15 @@ class CallViewModel extends ChangeNotifier {
 
     if (session != null && session.callId != null && session.callId != 0) {
       try {
-        await _appRepository.updateCallStatus(session.callId!, 'rejected');
+        await _appRepository.updateCallStatus(session.callId!, 'cancelled');
+        print('[Agora Call] Updated call status to cancelled on decline.');
       } catch (e) {
-        print('[Agora Call] Error updating call status to rejected: $e');
+        print('[Agora Call] Error updating call status to cancelled: $e. Trying rejected...');
+        try {
+          await _appRepository.updateCallStatus(session.callId!, 'rejected');
+        } catch (e2) {
+          print('[Agora Call] Error updating call status to rejected: $e2');
+        }
       }
     }
   }
@@ -901,12 +958,12 @@ class CallViewModel extends ChangeNotifier {
   String? _historyError;
   String? get historyError => _historyError;
 
-  Future<void> fetchServerCallHistory() async {
+  Future<void> fetchServerCallHistory([String? username]) async {
     _isHistoryLoading = true;
     _historyError = null;
     notifyListeners();
     try {
-      final List<dynamic> serverData = await _appRepository.getCallHistory();
+      final List<dynamic> serverData = await _appRepository.getCallHistory(username);
       
       // Parse server response to CallLog
       _serverCallLogs = serverData.map((item) {
@@ -1102,9 +1159,15 @@ class CallViewModel extends ChangeNotifier {
     if (_isLeavingIntentionally) return;
     _isLeavingIntentionally = true;
     try {
-      await _appRepository.updateCallStatus(callId, 'rejected');
+      await _appRepository.updateCallStatus(callId, 'cancelled');
+      print('[Agora Call] Updated CallKit call $callId status to cancelled.');
     } catch (e) {
-      print('Error declining CallKit call on backend: $e');
+      print('Error declining CallKit call on backend with cancelled: $e. Trying rejected...');
+      try {
+        await _appRepository.updateCallStatus(callId, 'rejected');
+      } catch (e2) {
+        print('Error declining CallKit call on backend with rejected: $e2');
+      }
     }
     _isLeavingIntentionally = false;
     resetToIdle();
@@ -1117,7 +1180,8 @@ class CallViewModel extends ChangeNotifier {
           _status == CallStatus.ended || 
           _status == CallStatus.cancelled || 
           _status == CallStatus.rejected || 
-          _status == CallStatus.missed) {
+          _status == CallStatus.missed ||
+          _status == CallStatus.remoteLeft) {
         await prefs.remove('active_call_id');
         await prefs.remove('active_call_status');
       } else {

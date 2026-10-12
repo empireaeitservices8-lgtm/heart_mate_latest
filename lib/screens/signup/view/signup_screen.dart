@@ -4,8 +4,8 @@ import 'package:dating_app/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../view_model/signup_viewmodel.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/permission_service.dart';
+import '../../../helpers/sp_helper.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -121,7 +121,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                     // Social login actions (These are always displayed at the top)
                     _buildSocialButton(
-                      icon: FontAwesomeIcons.google,
+                      iconWidget: const FaIcon(
+                        FontAwesomeIcons.google,
+                        color: Colors.black87,
+                        size: 18,
+                      ),
                       label: "Login with Google",
                       bgColor: Colors.white,
                       textColor: Colors.black87,
@@ -153,7 +157,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             );
                             viewModel.fetchProfile();
                             viewModel.fetchCoins();
-                            if (viewModel.isAgentMode) {
+                            final isAgent = await SpHelper.getIsAgent() || viewModel.isAgentMode;
+                            if (isAgent) {
                               navigator.pushReplacementNamed('/agent-dashboard');
                             } else {
                               await PermissionService.requestAppPermissions();
@@ -183,7 +188,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     /*
                     const SizedBox(height: 12),
                     _buildSocialButton(
-                      icon: FontAwesomeIcons.phone,
+                      iconWidget: const FaIcon(FontAwesomeIcons.phone, size: 18),
                       label: "Login with Number",
                       bgColor: AppTheme.surfaceCard,
                       textColor: AppTheme.textPrimary,
@@ -361,7 +366,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       );
                                       viewModel.fetchProfile();
                                       viewModel.fetchCoins();
-                                      if (viewModel.isAgentMode) {
+                                      final isAgent = await SpHelper.getIsAgent() || viewModel.isAgentMode;
+                                      if (isAgent) {
                                         navigator.pushReplacementNamed('/agent-dashboard');
                                       } else {
                                         await PermissionService.requestAppPermissions();
@@ -715,7 +721,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Widget _buildSocialButton({
-    required IconData icon,
+    IconData? icon,
+    Widget? iconWidget,
     required String label,
     required Color bgColor,
     required Color textColor,
@@ -723,7 +730,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
     required VoidCallback onTap,
   }) {
     return ElevatedButton.icon(
-      icon: Icon(icon, color: textColor, size: 18),
+      icon: iconWidget ??
+          (icon != null
+              ? Icon(icon, color: textColor, size: 18)
+              : const SizedBox.shrink()),
       label: Text(
         label,
         style: TextStyle(

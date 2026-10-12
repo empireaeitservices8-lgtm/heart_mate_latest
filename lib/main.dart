@@ -48,16 +48,21 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final typeVal = data['type']?.toString().trim().toLowerCase() ?? '';
   final callId = data['call_id']?.toString() ?? data['callId']?.toString() ?? data['id']?.toString() ?? '0';
   
-  final isCallEvent = typeVal == 'call' ||
-      typeVal == 'incoming_call' ||
-      typeVal == 'video' ||
-      typeVal == 'voice' ||
-      typeVal == 'audio' ||
-      (callId != '0' &&
-          typeVal != 'call_cancelled' &&
-          typeVal != 'cancelled' &&
-          typeVal != 'rejected' &&
-          typeVal != 'ended');
+  final isCancelOrEnd = typeVal.contains('cancel') ||
+      typeVal.contains('reject') ||
+      typeVal.contains('decline') ||
+      typeVal.contains('end') ||
+      typeVal.contains('hangup') ||
+      typeVal.contains('completed') ||
+      typeVal.contains('missed');
+
+  final isCallEvent = !isCancelOrEnd &&
+      (typeVal == 'call' ||
+          typeVal == 'incoming_call' ||
+          typeVal == 'video' ||
+          typeVal == 'voice' ||
+          typeVal == 'audio' ||
+          callId != '0');
 
   if (isCallEvent && callId != '0') {
     final callerName = data['caller_name'] ?? data['nameCaller'] ?? 'Incoming Caller';
@@ -100,8 +105,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       },
     );
     await FlutterCallkitIncoming.showCallkitIncoming(params);
-  } else if (typeVal == 'call_cancelled' || typeVal == 'cancelled' || typeVal == 'cancel' || typeVal == 'rejected' || typeVal == 'completed' || typeVal == 'ended' || typeVal == 'hangup') {
-    final callIdStr = data['call_id'] ?? data['callId'];
+  } else if (isCancelOrEnd) {
+    final callIdStr = data['call_id'] ?? data['callId'] ?? data['id'];
     if (callIdStr != null) {
       await FlutterCallkitIncoming.endCall(callIdStr.toString());
     }
@@ -263,6 +268,17 @@ class HeartMateApp extends StatefulWidget {
         }
       }
 
+      if (routeName == '/incoming-call') {
+        if (AppRouteObserver.currentRoute == '/incoming-call') {
+          return;
+        }
+        if (AppRouteObserver.currentRoute == '/outgoing-call') {
+          print('[safeNavigate] Replacing /outgoing-call with /incoming-call');
+          state.pushReplacementNamed(routeName);
+          return;
+        }
+      }
+
       state.pushNamed(routeName);
     } else {
       // Retry in the next microtask/loop cycle to handle initial frame layout transitions
@@ -362,7 +378,10 @@ class _HeartMateAppState extends State<HeartMateApp> with WidgetsBindingObserver
         }
         HeartMateApp.safeNavigate('/active-call');
       } else {
-        if (callVM.status == CallStatus.idle) {
+        if (callVM.status != CallStatus.connected && callVM.status != CallStatus.accepting) {
+          if (callVM.status != CallStatus.idle) {
+            callVM.resetToIdle();
+          }
           callVM.handleIncomingCall(
             callId: callId,
             channelId: channelName,
@@ -496,8 +515,8 @@ class _HeartMateAppState extends State<HeartMateApp> with WidgetsBindingObserver
     // When the call has already been answered/connected in-app, CallKit notification
     // dismissals or background end events must NOT terminate the active call.
     if (callVM.status == CallStatus.incoming || callVM.status == CallStatus.ringing) {
-      print('[debug_callkit] CallKit ended event received for ringing/incoming call $callId. Cancelling.');
-      callVM.handleCallCancelled(callId: callId);
+      print('[debug_callkit] CallKit ended event received for ringing/incoming call $callId. Declining and updating backend.');
+      callVM.declineCallKitCall(callId);
     } else {
       print('[debug_callkit] Ignoring CallKit end event for call $callId because in-app status is ${callVM.status}');
     }
@@ -541,11 +560,17 @@ class _HeartMateAppState extends State<HeartMateApp> with WidgetsBindingObserver
 Future<void> _syncFcmTokenWithBackend(String fcmToken) async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    final lastUploaded = prefs.getString('last_uploaded_fcm_token');
     final authToken = prefs.getString('auth_token') ?? prefs.getString('token');
-    if (authToken != null && authToken.isNotEmpty && fcmToken.isNotEmpty && fcmToken != lastUploaded) {
+    if (authToken != null && authToken.isNotEmpty && fcmToken.isNotEmpty) {
       final appRepo = AppRepository();
-      await appRepo.updateProfile({'fcm_token': fcmToken});
+      final Map<String, dynamic> body = {'fcm_token': fcmToken};
+      final cachedUsername = prefs.getString('username');
+      final cachedEmail = prefs.getString('email');
+      if (cachedUsername != null && cachedUsername.isNotEmpty) body['username'] = cachedUsername;
+      if (cachedEmail != null && cachedEmail.isNotEmpty) body['email'] = cachedEmail;
+
+      await appRepo.updateProfile(body);
+      await prefs.setString('fcm_token', fcmToken);
       await prefs.setString('last_uploaded_fcm_token', fcmToken);
       print('[debug_fcm] Successfully synced FCM token with backend: $fcmToken');
     }
@@ -583,10 +608,8 @@ void _handleIncomingCallMessage(RemoteMessage message) {
 
   final typeVal = data['type']?.toString().trim().toLowerCase() ?? '';
 
-  final callIdStr = data['call_id'] ?? data['callId'] ?? data['id'];
-  final int callId = int.tryParse(callIdStr?.toString() ?? '') ?? 0;
-
-  if (callId == 0) return;
+  final callIdStr = data['call_id'] ?? data['callId'] ?? data['id'] ?? data['call_session_id'];
+  int callId = int.tryParse(callIdStr?.toString() ?? '') ?? 0;
 
   final context = HeartMateApp.navigatorKey.currentContext;
   if (context == null) {
@@ -599,19 +622,31 @@ void _handleIncomingCallMessage(RemoteMessage message) {
 
   final callVM = Provider.of<CallViewModel>(context, listen: false);
 
-  if (typeVal == 'call_cancelled' ||
-      typeVal == 'cancelled' ||
-      typeVal == 'cancel' ||
-      typeVal == 'rejected' ||
-      typeVal == 'completed' ||
-      typeVal == 'ended' ||
-      typeVal == 'hangup' ||
-      typeVal == 'decline' ||
-      typeVal == 'declined') {
+  if (callId == 0 && callVM.currentSession?.callId != null) {
+    callId = callVM.currentSession!.callId!;
+  }
+
+  final isCancelOrEnd = typeVal.contains('cancel') ||
+      typeVal.contains('reject') ||
+      typeVal.contains('decline') ||
+      typeVal.contains('end') ||
+      typeVal.contains('hangup') ||
+      typeVal.contains('completed') ||
+      typeVal.contains('missed');
+
+  if (isCancelOrEnd) {
     print('[debug_fcm] Processing cancellation/end event ($typeVal) for call $callId');
-    callVM.handleCallCancelled(callId: callId);
+    final signupVM = Provider.of<SignUpViewModel>(context, listen: false);
+    if (callVM.status == CallStatus.connected) {
+      callVM.hangUp(signupVM);
+    } else {
+      final isRejected = typeVal.contains('reject') || typeVal.contains('decline') || typeVal.contains('missed');
+      callVM.handleCallCancelled(callId: callId, isRejected: isRejected);
+    }
     return;
   }
+
+  if (callId == 0) return;
 
   final callerIdStr = data['caller_id'] ?? data['callerId'];
   final int callerId = int.tryParse(callerIdStr?.toString() ?? '') ?? 0;
@@ -625,10 +660,16 @@ void _handleIncomingCallMessage(RemoteMessage message) {
     return;
   }
 
-  // Ignore if we are already active in another call state (e.g. outgoing, connected)
-  if (callVM.status != CallStatus.idle) {
-    print('[debug_fcm] Incoming call $callId ignored because we are already in call status: ${callVM.status}');
+  // Ignore only if we are already in an active connected conversation
+  if (callVM.status == CallStatus.connected || callVM.status == CallStatus.accepting) {
+    print('[debug_fcm] Incoming call $callId ignored because we are already connected in call: ${callVM.status}');
     return;
+  }
+
+  // Cleanly reset any previous, idle, or lingering outgoing call state
+  if (callVM.status != CallStatus.idle) {
+    print('[debug_fcm] Resetting previous status (${callVM.status}) to idle for new incoming call $callId');
+    callVM.resetToIdle();
   }
 
   final callerName = data['caller_name'] ?? data['nameCaller'] ?? 'Incoming Caller';

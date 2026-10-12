@@ -31,6 +31,7 @@ class AppUrls {
 
   // Users endpoints
   static const String users = '/users/';
+  static const String agents = '/agents/';
   static const String addUser = '/users/add/';
   static const String deleteUserDevice = '/users/delete-device/';
   static const String deleteUserGroup = '/users/delete-group/';
@@ -47,7 +48,6 @@ class AppUrls {
   static const String addCoins = '/coins/add/';
   static const String offers = '/offers/';
   static const String coinPackages = '/coins/packages/';
-  static const String coinTransactions = '/coins/transactions/';
   static const String createPaymentOrder = '/payment/order/';
   static const String verifyPayment = '/payment/verify/';
 

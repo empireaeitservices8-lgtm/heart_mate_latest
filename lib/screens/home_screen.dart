@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:dating_app/theme/app_theme.dart';
 import 'package:dating_app/models/user_listing.dart';
 import 'package:dating_app/models/call.dart';
+import 'package:dating_app/models/agent_dashboard_model.dart';
 import 'package:dating_app/screens/signup/view_model/signup_viewmodel.dart';
 import 'package:dating_app/screens/call/view_model/call_viewmodel.dart';
 
@@ -20,10 +21,13 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final viewModel = Provider.of<SignUpViewModel>(context, listen: false);
-      viewModel.fetchUsers();
       viewModel.updateStatus("online", true);
       if (viewModel.isAgentMode) {
         viewModel.fetchAgentDashboard();
+        viewModel.fetchCoins();
+        viewModel.fetchWithdrawals();
+      } else {
+        viewModel.fetchAgents();
       }
     });
   }
@@ -137,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         } else if (viewModel.users.isEmpty) {
                           return const Center(
                             child: Text(
-                              'No users found',
+                              'No agents available at the moment',
                               style: TextStyle(color: AppTheme.textSecondary),
                             ),
                           );
@@ -148,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         return RefreshIndicator(
                           color: AppTheme.accentRose,
                           onRefresh: () async {
-                            await viewModel.fetchUsers();
+                            await viewModel.fetchAgents();
                           },
                           child: ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(
@@ -216,76 +220,60 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     SignUpViewModel viewModel,
   ) {
-    final stats = viewModel.agentDashboardData;
-    final String talkDuration =
-        stats?['talk_duration']?.toString() ?? '12h 45m';
-    final String callsCompleted =
-        stats?['calls_completed']?.toString() ?? '48 Calls';
-    final String rating = stats?['rating']?.toString() ?? '4.9 ★';
-    final String totalEarnings =
-        stats?['total_earnings']?.toString() ??
-        stats?['coins']?.toString() ??
-        '${viewModel.coins}';
+    final model = viewModel.agentDashboardModel;
+    final agent = model?.agent;
+    final tasks = model?.tasks;
 
-    final List<dynamic>? apiClients =
-        stats?['waiting_clients'] as List<dynamic>? ??
-        stats?['clients'] as List<dynamic>?;
-    final List<Map<String, dynamic>> waitingClients =
-        (apiClients != null && apiClients.isNotEmpty)
-        ? apiClients.map((client) {
-            final map = Map<String, dynamic>.from(client as Map);
-            // Ensure avatar fallback if none provided
-            if (map['avatar'] == null || map['avatar'].toString().isEmpty) {
-              map['avatar'] = map['gender'] == 'male'
-                  ? 'assets/images/boy.jpg'
-                  : 'assets/images/girl.jpg';
-            }
-            // Ensure status/waiting text
-            if (map['status'] == null) {
-              map['status'] = 'Waiting since ${map['waiting_time'] ?? '1m'}';
-            }
-            return map;
-          }).toList()
-        : [
-            {
-              'id': 101,
-              'name': 'Sophia',
-              'age': 22,
-              'gender': 'female',
-              'status': 'Waiting since 1m',
-              'avatar': 'assets/images/girl.jpg',
-            },
-            {
-              'id': 102,
-              'name': 'Chloe',
-              'age': 20,
-              'gender': 'female',
-              'status': 'Waiting since 4m',
-              'avatar': 'assets/images/girl.jpg',
-            },
-            {
-              'id': 103,
-              'name': 'Daniel',
-              'age': 25,
-              'gender': 'male',
-              'status': 'Waiting since 7m',
-              'avatar': 'assets/images/boy.jpg',
-            },
-            {
-              'id': 104,
-              'name': 'Emma',
-              'age': 21,
-              'gender': 'female',
-              'status': 'Waiting since 11m',
-              'avatar': 'assets/images/girl.jpg',
-            },
-          ];
+    final stats = viewModel.agentDashboardData;
+    final rawAgent = (stats?['agent'] is Map)
+        ? (stats!['agent'] as Map<String, dynamic>)
+        : stats;
+
+    final String todayTalkDuration = agent?.todayDurationFormatted ??
+        rawAgent?['today_duration_formatted']?.toString() ??
+        rawAgent?['talk_duration']?.toString() ??
+        '0h 0m';
+    final String totalTalkDuration = agent?.totalDurationFormatted ??
+        rawAgent?['total_duration_formatted']?.toString() ??
+        '0h 0m';
+
+    final int callsCompletedCount = agent?.callsCompleted ??
+        (rawAgent?['calls_completed'] as num?)?.toInt() ??
+        0;
+
+    final double ratingVal = agent?.agentRating ??
+        (rawAgent?['agent_rating'] as num?)?.toDouble() ??
+        (rawAgent?['rating'] as num?)?.toDouble() ??
+        4.9;
+
+    final num totalEarningsVal = agent?.totalEarnings ??
+        (rawAgent?['total_earnings'] as num?) ??
+        (rawAgent?['coins_earned'] as num?) ??
+        viewModel.coins;
+
+    final num todayEarningsVal = agent?.todayEarnings ??
+        (rawAgent?['today_earnings'] as num?) ??
+        0;
+
+    final num successRateVal = agent?.successRate ??
+        (rawAgent?['success_rate'] as num?) ??
+        100;
+
+    final int walletBalanceVal = agent?.walletBalance ??
+        (rawAgent?['wallet_balance'] as num?)?.toInt() ??
+        viewModel.coins;
+
+    final int coinsEarnedVal = agent?.coinsEarned ??
+        (rawAgent?['coins_earned'] as num?)?.toInt() ??
+        viewModel.coins;
+
+    final isOnline = viewModel.profile?.isOnline ?? true;
 
     return RefreshIndicator(
       color: AppTheme.accentRose,
       onRefresh: () async {
         await viewModel.fetchCoins();
-        await viewModel.fetchUsers();
+        await viewModel.fetchWithdrawals();
         await viewModel.fetchAgentDashboard();
       },
       child: ListView(
@@ -294,7 +282,199 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         children: [
-          // Premium Stat Cards Grid (Hours online, completed calls, rating, earnings)
+          // 1. Agent Availability & Call Readiness Card
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceCard,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isOnline ? AppTheme.callGreen.withOpacity(0.4) : AppTheme.borderTranslucent,
+              ),
+              boxShadow: [
+                if (isOnline)
+                  BoxShadow(
+                    color: AppTheme.callGreen.withOpacity(0.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, 4),
+                  )
+                else
+                  ...AppTheme.softCardShadow,
+              ],
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isOnline ? AppTheme.callGreen : AppTheme.textSecondary,
+                            boxShadow: isOnline
+                                ? [
+                                    BoxShadow(
+                                      color: AppTheme.callGreen.withOpacity(0.6),
+                                      blurRadius: 8,
+                                      spreadRadius: 2,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isOnline ? 'Online & Ready' : 'Currently Offline',
+                              style: TextStyle(
+                                color: isOnline ? AppTheme.callGreen : AppTheme.textSecondary,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              isOnline ? 'Accepting audio & video calls' : 'Turn on to receive calls',
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Switch.adaptive(
+                      value: isOnline,
+                      activeColor: AppTheme.callGreen,
+                      onChanged: (val) {
+                        viewModel.toggleOnlineStatus();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundObsidian.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: AppTheme.textSecondary, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Keep HeartMate open in the background to never miss incoming user calls.',
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 2. Earnings Banner with Direct Withdraw CTA
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.accentRose.withOpacity(0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TOTAL COIN BALANCE',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '₹$walletBalanceVal.00',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '($coinsEarnedVal Coins Earned)',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    if (widget.onTabSwitch != null) {
+                      widget.onTabSwitch!(1); // Switch to Wallet tab
+                    } else {
+                      Navigator.pushNamed(context, '/agent-wallet');
+                    }
+                  },
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 15),
+                  label: const Text(
+                    'Withdraw',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF8B5CF6),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 3. Performance Metrics Header
           const Text(
             "AGENT PERFORMANCE DASHBOARD",
             style: TextStyle(
@@ -318,242 +498,227 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: Icons.access_time_rounded,
                 iconColor: AppTheme.accentViolet,
                 title: 'Talk Duration',
-                value: talkDuration,
-                subtitle: 'Online Today',
+                value: todayTalkDuration,
+                subtitle: 'Total: $totalTalkDuration',
               ),
               _buildStatCard(
                 icon: Icons.phone_callback_rounded,
                 iconColor: AppTheme.callGreen,
                 title: 'Calls Completed',
-                value: callsCompleted.endsWith('Calls')
-                    ? callsCompleted
-                    : '$callsCompleted Calls',
-                subtitle: '100% Success Rate',
+                value: '$callsCompletedCount Calls',
+                subtitle: '$successRateVal% Success Rate',
               ),
               _buildStatCard(
                 icon: Icons.monetization_on_rounded,
                 iconColor: AppTheme.accentGold,
                 title: 'Total Earnings',
-                value: totalEarnings,
-                subtitle: 'Earned Today',
+                value: '₹$totalEarningsVal',
+                subtitle: 'Today: ₹$todayEarningsVal',
               ),
               _buildStatCard(
                 icon: Icons.star_rate_rounded,
                 iconColor: Colors.orangeAccent,
                 title: 'Agent Rating',
-                value: rating.endsWith('★') ? rating : '$rating ★',
+                value: '$ratingVal ★',
                 subtitle: 'Excellent Feedback',
               ),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
 
-          // Waiting Call Requests Header
+          // 4. Agent Tasks & Milestone Goals
+          if (tasks != null) ...[
+            const Text(
+              "CALL TARGETS & GOALS",
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceCard,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppTheme.borderTranslucent),
+                boxShadow: AppTheme.softCardShadow,
+              ),
+              child: Column(
+                children: [
+                  _buildTaskProgressItem(
+                    label: 'Daily Target',
+                    completed: tasks.daily.completed,
+                    target: tasks.daily.target,
+                    percentage: tasks.daily.progressPercentage,
+                    color: AppTheme.accentViolet,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTaskProgressItem(
+                    label: 'Weekly Target',
+                    completed: tasks.weekly.completed,
+                    target: tasks.weekly.target,
+                    percentage: tasks.weekly.progressPercentage,
+                    color: AppTheme.accentRose,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTaskProgressItem(
+                    label: 'Monthly Milestone',
+                    completed: tasks.monthly.completed,
+                    target: tasks.monthly.target,
+                    percentage: tasks.monthly.progressPercentage,
+                    color: AppTheme.callGreen,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
+          // 4. Quick Agent Shortcuts
+          const Text(
+            "AGENT ACTIONS & SHORTCUTS",
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "INCOMING CALL QUEUE",
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
+              Expanded(
+                child: _buildActionTile(
+                  icon: Icons.account_balance_wallet_rounded,
+                  iconColor: AppTheme.accentRose,
+                  title: 'Wallet & Payouts',
+                  subtitle: 'Request money',
+                  onTap: () {
+                    if (widget.onTabSwitch != null) {
+                      widget.onTabSwitch!(1);
+                    } else {
+                      Navigator.pushNamed(context, '/agent-wallet');
+                    }
+                  },
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'LIVE CALLS',
-                      style: TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionTile(
+                  icon: Icons.phone_in_talk_rounded,
+                  iconColor: Colors.lightBlueAccent,
+                  title: 'Call History',
+                  subtitle: 'View past calls',
+                  onTap: () {
+                    Navigator.pushNamed(context, '/call-history');
+                  },
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // Waiting queue list
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: waitingClients.length,
-            itemBuilder: (context, index) {
-              final client = waitingClients[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceCard,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppTheme.borderTranslucent),
-                  boxShadow: AppTheme.softCardShadow,
-                ),
-                child: Row(
-                  children: [
-                    // Client Photo
-                    Container(
-                      padding: const EdgeInsets.all(2.5),
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: AppTheme.primaryGradient,
-                      ),
-                      child: CircleAvatar(
-                        radius: 26,
-                        backgroundImage:
-                            (client['avatar'].toString().startsWith('http') ||
-                                client['avatar'].toString().startsWith('https'))
-                            ? NetworkImage(client['avatar']) as ImageProvider
-                            : AssetImage(client['avatar']) as ImageProvider,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Info details
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${client['name']}, ${client['age']}',
-                            style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.access_time_rounded,
-                                color: AppTheme.textSecondary,
-                                size: 13,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                client['status'],
-                                style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Connect Button
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: AppTheme.callGreenGradient,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: AppTheme.glowShadow(AppTheme.callGreen),
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          // Show connecting loader dialog
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (context) => const Center(
-                              child: Card(
-                                color: AppTheme.surfaceCard,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.all(
-                                    Radius.circular(20),
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 32.0,
-                                    vertical: 24.0,
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      CircularProgressIndicator(
-                                        color: AppTheme.accentRose,
-                                      ),
-                                      SizedBox(height: 16),
-                                      Text(
-                                        'Connecting client call...',
-                                        style: TextStyle(
-                                          color: AppTheme.textPrimary,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-
-                          // Simulate API connection delay of 1.5 seconds
-                          await Future.delayed(
-                            const Duration(milliseconds: 1500),
-                          );
-
-                          if (context.mounted) {
-                            Navigator.pop(context); // dismiss loader
-                            Navigator.pushNamed(context, '/active-call');
-                          }
-                        },
-                        icon: const Icon(Icons.phone_in_talk_rounded, size: 16),
-                        label: const Text(
-                          'Connect',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shadowColor: Colors.transparent,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 80),
+          const SizedBox(height: 60),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTaskProgressItem({
+    required String label,
+    required int completed,
+    required int target,
+    required num percentage,
+    required Color color,
+  }) {
+    final double progress = (target > 0 ? (completed / target) : 0.0).clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              '$completed / $target calls (${percentage.toStringAsFixed(0)}%)',
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            backgroundColor: AppTheme.borderTranslucent,
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.borderTranslucent),
+          boxShadow: AppTheme.softCardShadow,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 20),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 13.5,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -633,7 +798,16 @@ class UserListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOnline = user.status.toLowerCase() == 'online';
+    final isOnCall = user.isOnCall ||
+        user.status.toLowerCase() == 'on call' ||
+        user.status.toLowerCase() == 'on_call';
+    final isOnline = !isOnCall &&
+        (user.isOnline || user.status.toLowerCase() == 'online');
+
+    final Color statusColor = isOnCall
+        ? AppTheme.accentGold
+        : (isOnline ? AppTheme.callGreen : Colors.grey);
+    final String statusText = isOnCall ? 'ON CALL' : (isOnline ? 'ONLINE' : 'OFFLINE');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -675,7 +849,7 @@ class UserListTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Online Pill Badge
+                  // Online / On-Call Pill Badge
                   Positioned(
                     bottom: -6,
                     child: Container(
@@ -698,15 +872,13 @@ class UserListTile extends StatelessWidget {
                             width: 6,
                             height: 6,
                             decoration: BoxDecoration(
-                              color: isOnline
-                                  ? AppTheme.callGreen
-                                  : Colors.grey,
+                              color: statusColor,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            user.status.toUpperCase(),
+                            statusText,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 7,
@@ -847,6 +1019,21 @@ class UserListTile extends StatelessWidget {
   }
 
   void _initiateCall(BuildContext context, CallType type) async {
+    final isOnCall = user.isOnCall ||
+        user.status.toLowerCase() == 'on call' ||
+        user.status.toLowerCase() == 'on_call';
+
+    if (isOnCall) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${user.name} is currently on another call. Please try again soon.'),
+          backgroundColor: Colors.amber.shade900,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final signupVM = Provider.of<SignUpViewModel>(context, listen: false);
     final callVM = Provider.of<CallViewModel>(context, listen: false);
 

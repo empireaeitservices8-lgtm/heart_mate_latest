@@ -14,7 +14,6 @@ class SupportScreen extends StatefulWidget {
 }
 
 class _SupportScreenState extends State<SupportScreen> {
-
   @override
   void initState() {
     super.initState();
@@ -56,20 +55,25 @@ class _SupportScreenState extends State<SupportScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundObsidian,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.bgGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppTheme.bgGradient),
         child: SafeArea(
           child: Column(
             children: [
               // Custom Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16.0,
+                  vertical: 12.0,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, color: AppTheme.textPrimary, size: 20),
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: AppTheme.textPrimary,
+                        size: 20,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const Text(
@@ -89,19 +93,25 @@ class _SupportScreenState extends State<SupportScreen> {
               Expanded(
                 child: Consumer<SignUpViewModel>(
                   builder: (context, viewModel, child) {
-                    if (viewModel.isHelpLineLoading && viewModel.helpLine == null) {
+                    if (viewModel.isHelpLineLoading &&
+                        viewModel.helpLine == null) {
                       return const Center(
-                        child: CircularProgressIndicator(color: AppTheme.accentRose),
+                        child: CircularProgressIndicator(
+                          color: AppTheme.accentRose,
+                        ),
                       );
                     }
 
                     // Fallback dummy data if API fails or returns null
-                    final data = viewModel.helpLine ?? HelpLine(
-                      phone: "+1 800 555 0199",
-                      email: "support@heartmate.app",
-                      available: "24/7 Support Available",
-                      address: "100 Love Connection Blvd, Suite 500, San Francisco, CA 94103",
-                    );
+                    final data =
+                        viewModel.helpLine ??
+                        HelpLine(
+                          phone: "+1 800 555 0199",
+                          email: "support@heartmate.app",
+                          available: "24/7 Support Available",
+                          address:
+                              "100 Love Connection Blvd, Suite 500, San Francisco, CA 94103",
+                        );
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -154,7 +164,7 @@ class _SupportScreenState extends State<SupportScreen> {
                           ),
 
                           const Spacer(),
-                          
+
                           // Support details Card
                           Container(
                             padding: const EdgeInsets.all(8),
@@ -162,7 +172,9 @@ class _SupportScreenState extends State<SupportScreen> {
                             decoration: BoxDecoration(
                               color: AppTheme.surfaceCard,
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: AppTheme.borderTranslucent),
+                              border: Border.all(
+                                color: AppTheme.borderTranslucent,
+                              ),
                             ),
                             child: Column(
                               children: [
@@ -174,20 +186,37 @@ class _SupportScreenState extends State<SupportScreen> {
                                     padding: const EdgeInsets.all(12.0),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.email_outlined, color: AppTheme.accentRose, size: 20),
+                                        const Icon(
+                                          Icons.email_outlined,
+                                          color: AppTheme.accentRose,
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             data.email,
-                                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                                            style: const TextStyle(
+                                              color: AppTheme.textPrimary,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
-                                        const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary, size: 18),
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: AppTheme.textSecondary,
+                                          size: 18,
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ),
-                                Divider(color: AppTheme.borderTranslucent.withOpacity(0.5), height: 1),
+                                Divider(
+                                  color: AppTheme.borderTranslucent.withOpacity(
+                                    0.5,
+                                  ),
+                                  height: 1,
+                                ),
                                 // Phone Call Tile
                                 InkWell(
                                   onTap: () => _launchCall(data.phone),
@@ -196,26 +225,48 @@ class _SupportScreenState extends State<SupportScreen> {
                                     padding: const EdgeInsets.all(12.0),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.phone_outlined, color: Colors.blueAccent, size: 20),
+                                        const Icon(
+                                          Icons.phone_outlined,
+                                          color: Colors.blueAccent,
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             data.phone,
-                                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                                            style: const TextStyle(
+                                              color: AppTheme.textPrimary,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
-                                        const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary, size: 18),
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: AppTheme.textSecondary,
+                                          size: 18,
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ),
-                                Divider(color: AppTheme.borderTranslucent.withOpacity(0.5), height: 1),
+                                Divider(
+                                  color: AppTheme.borderTranslucent.withOpacity(
+                                    0.5,
+                                  ),
+                                  height: 1,
+                                ),
                                 // Address / Location Tile
                                 InkWell(
                                   onTap: () async {
-                                    final url = Uri.parse("https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(data.address)}");
+                                    final url = Uri.parse(
+                                      "https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(data.address)}",
+                                    );
                                     try {
-                                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                                      await launchUrl(
+                                        url,
+                                        mode: LaunchMode.externalApplication,
+                                      );
                                     } catch (e) {
                                       print('Google Maps launch error: $e');
                                     }
@@ -225,17 +276,29 @@ class _SupportScreenState extends State<SupportScreen> {
                                     padding: const EdgeInsets.all(12.0),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.location_on_outlined, color: Colors.amberAccent, size: 20),
+                                        const Icon(
+                                          Icons.location_on_outlined,
+                                          color: Colors.amberAccent,
+                                          size: 20,
+                                        ),
                                         const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             data.address,
-                                            style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                                            style: const TextStyle(
+                                              color: AppTheme.textPrimary,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
-                                        const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary, size: 18),
+                                        const Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: AppTheme.textSecondary,
+                                          size: 18,
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -255,14 +318,19 @@ class _SupportScreenState extends State<SupportScreen> {
                               ),
                               decoration: BoxDecoration(
                                 gradient: const LinearGradient(
-                                  colors: [Color(0xFF25D366), Color(0xFF075E54)],
+                                  colors: [
+                                    Color(0xFF25D366),
+                                    Color(0xFF075E54),
+                                  ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF25D366).withOpacity(0.25),
+                                    color: const Color(
+                                      0xFF25D366,
+                                    ).withOpacity(0.25),
                                     blurRadius: 20,
                                     offset: const Offset(0, 6),
                                   ),
@@ -270,7 +338,7 @@ class _SupportScreenState extends State<SupportScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(
+                                  FaIcon(
                                     FontAwesomeIcons.whatsapp,
                                     color: Colors.white,
                                     size: 36,
@@ -278,7 +346,8 @@ class _SupportScreenState extends State<SupportScreen> {
                                   const SizedBox(width: 20),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(

@@ -7,10 +7,13 @@ import '../../../repositories/app_repository.dart';
 import '../../../models/user_profile.dart';
 import '../../../models/offer_item.dart';
 import '../../../models/user_listing.dart';
+import '../../../models/agent_models.dart';
+import '../../../models/agent_dashboard_model.dart';
 import '../../../models/help_line.dart';
 import '../../../models/content_item.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../../../helpers/sp_helper.dart';
 
 class SignUpViewModel extends ChangeNotifier {
   final SignupRepository _repository = SignupRepository();
@@ -50,6 +53,12 @@ class SignUpViewModel extends ChangeNotifier {
   String? _transactionsError;
   String? get transactionsError => _transactionsError;
 
+  List<Map<String, dynamic>> _withdrawals = [];
+  List<Map<String, dynamic>> get withdrawals => _withdrawals;
+
+  bool _isWithdrawalsLoading = false;
+  bool get isWithdrawalsLoading => _isWithdrawalsLoading;
+
   bool _isAgentStatusLoading = false;
   bool get isAgentStatusLoading => _isAgentStatusLoading;
 
@@ -63,6 +72,11 @@ class SignUpViewModel extends ChangeNotifier {
   bool _isUsersLoading = false;
   bool get isUsersLoading => _isUsersLoading;
 
+  List<AgentModel> _agents = [];
+  List<AgentModel> get agents => _agents;
+  bool _isAgentsLoading = false;
+  bool get isAgentsLoading => _isAgentsLoading;
+
   HelpLine? _helpLine;
   HelpLine? get helpLine => _helpLine;
   bool _isHelpLineLoading = false;
@@ -70,6 +84,8 @@ class SignUpViewModel extends ChangeNotifier {
 
   Map<String, dynamic>? _agentDashboardData;
   Map<String, dynamic>? get agentDashboardData => _agentDashboardData;
+  AgentDashboardModel? _agentDashboardModel;
+  AgentDashboardModel? get agentDashboardModel => _agentDashboardModel;
   bool _isAgentDashboardLoading = false;
   bool get isAgentDashboardLoading => _isAgentDashboardLoading;
 
@@ -93,35 +109,57 @@ class SignUpViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchProfile() async {
+  Future<void> fetchProfile([String? username]) async {
     _isProfileLoading = true;
     _setError(null);
     notifyListeners();
     try {
-      _profile = await _appRepository.getProfile();
+      String uname = username ?? '';
+      if (uname.isEmpty) {
+        uname = await SpHelper.getUsername() ?? '';
+      }
+      if (uname.isEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        uname = prefs.getString('username') ?? '';
+      }
+
+      _profile = await _appRepository.getProfile(uname.isNotEmpty ? uname : null);
       await fetchAgentStatus();
       
       // Load current isAgentMode from preferences
       final prefs = await SharedPreferences.getInstance();
-      if (_profile?.isAgent ?? false) {
-        await prefs.setBool('is_agent_mode', true);
-        _isAgentMode = true;
+      if (_profile != null && _profile!.username.isNotEmpty) {
+        await prefs.setString('username', _profile!.username);
+        await SpHelper.setUsername(_profile!.username);
+      }
+      if (_profile != null) {
+        final bool isAgent = _profile!.isAgent;
+        await prefs.setBool('is_agent_mode', isAgent);
+        await SpHelper.setIsAgent(isAgent);
+        _isAgentMode = isAgent;
       } else {
-        _isAgentMode = prefs.getBool('is_agent_mode') ?? false;
+        _isAgentMode = await SpHelper.getIsAgent();
       }
       
       if (_isAgentMode) {
         await fetchTransactions();
+        await fetchWithdrawals();
         await fetchAgentDashboard();
       }
 
-      // Sync FCM Token with backend if changed/new
+      // Sync FCM Token with backend for this user
       final fcmToken = prefs.getString('fcm_token');
-      final lastUploadedToken = prefs.getString('last_uploaded_fcm_token');
-      if (fcmToken != null && fcmToken.isNotEmpty && fcmToken != lastUploadedToken) {
-        print('[debug_fcm] Syncing refreshed FCM token with backend: $fcmToken');
+      final userTokenKey = 'last_uploaded_fcm_token_${_profile?.id}';
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        print('[debug_fcm] Syncing FCM token with backend for user ${_profile?.id}: $fcmToken');
         try {
-          await _appRepository.updateProfile({'fcm_token': fcmToken});
+          final Map<String, dynamic> updateData = {'fcm_token': fcmToken};
+          if (_profile != null) {
+            if (_profile!.username.isNotEmpty) updateData['username'] = _profile!.username;
+            if (_profile!.email.isNotEmpty) updateData['email'] = _profile!.email;
+          }
+          await _appRepository.updateProfile(updateData);
+          await prefs.setString(userTokenKey, fcmToken);
           await prefs.setString('last_uploaded_fcm_token', fcmToken);
           print('[debug_fcm] Successfully synced FCM token with backend.');
         } catch (e) {
@@ -164,18 +202,25 @@ class SignUpViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchUsers() async {
+  Future<void> fetchAgents() async {
+    _isAgentsLoading = true;
     _isUsersLoading = true;
     _setError(null);
     notifyListeners();
     try {
-      _users = await _appRepository.getUsers();
+      _agents = await _appRepository.getAgents();
+      _users = _agents.map((agent) => agent.toUserListing()).toList();
     } catch (e) {
       _setError(e.toString().replaceAll('Exception: ', ''));
     } finally {
+      _isAgentsLoading = false;
       _isUsersLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> fetchUsers() async {
+    await fetchAgents();
   }
 
   Future<void> fetchHelpLine() async {
@@ -289,8 +334,11 @@ class SignUpViewModel extends ChangeNotifier {
       print('API Logout error: $e');
     }
     await _storageService.clearToken();
+    await SpHelper.clearSession();
+    await clearAgentSession();
     _profile = null;
     _coins = 0;
+    _isAgentMode = false;
     _setLoading(false);
     notifyListeners();
   }
@@ -330,8 +378,14 @@ class SignUpViewModel extends ChangeNotifier {
       // Save token to preferences
       await _storageService.saveToken(response.token);
       await _storageService.setLoggedIn(true);
+      await _storageService.saveUsername(username);
+      await SpHelper.setToken(response.token);
+      await SpHelper.setIsLoggedIn(true);
+      await SpHelper.setUsername(username);
+      await SpHelper.setIsAgent(false);
       
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', username);
       await prefs.setBool('is_agent_mode', false);
       _isAgentMode = false;
       
@@ -359,14 +413,21 @@ class SignUpViewModel extends ChangeNotifier {
       // Save token to preferences
       await _storageService.saveToken(response.token);
       await _storageService.setLoggedIn(true);
+      await _storageService.saveUsername(username);
+      
+      final bool isAgent = response.isAgent;
+      await SpHelper.setToken(response.token);
+      await SpHelper.setIsLoggedIn(true);
+      await SpHelper.setUsername(username);
+      await SpHelper.setIsAgent(isAgent);
       
       final prefs = await SharedPreferences.getInstance();
-      final bool isAgent = response.isAgent;
+      await prefs.setString('username', username);
       await prefs.setBool('is_agent_mode', isAgent);
       _isAgentMode = isAgent;
 
       if (isAgent) {
-        await fetchAgentDashboard();
+        await fetchAgentDashboard(username);
       }
       
       _setLoading(false);
@@ -398,10 +459,19 @@ class SignUpViewModel extends ChangeNotifier {
         await _storageService.saveToken(response.token);
         await _storageService.setLoggedIn(true);
 
-        final prefs = await SharedPreferences.getInstance();
         final bool isAgent = response.isAgent;
+        await SpHelper.setToken(response.token);
+        await SpHelper.setIsLoggedIn(true);
+        await SpHelper.setIsAgent(isAgent);
+
+        final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_agent_mode', isAgent);
         _isAgentMode = isAgent;
+
+        if (response.user != null && response.user!.username.isNotEmpty) {
+          await prefs.setString('username', response.user!.username);
+          await SpHelper.setUsername(response.user!.username);
+        }
 
         if (isAgent) {
           await fetchAgentDashboard();
@@ -588,15 +658,97 @@ class SignUpViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchAgentDashboard() async {
+  Future<void> fetchAgentDashboard([String? username]) async {
     _isAgentDashboardLoading = true;
     notifyListeners();
     try {
-      _agentDashboardData = await _appRepository.getAgentDashboard();
+      final uname = username ?? _profile?.username;
+      _agentDashboardData = await _appRepository.getAgentDashboard(uname);
+      if (_agentDashboardData != null && _agentDashboardData!.isNotEmpty) {
+        _agentDashboardModel = AgentDashboardModel.fromJson(_agentDashboardData!);
+        final agent = _agentDashboardModel!.agent;
+        if (agent.walletBalance > 0) {
+          _coins = agent.walletBalance;
+        } else if (agent.coinsEarned > 0) {
+          _coins = agent.coinsEarned;
+        }
+      }
     } catch (e) {
       print('Error fetching agent dashboard: $e');
     } finally {
       _isAgentDashboardLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchWithdrawals() async {
+    _isWithdrawalsLoading = true;
+    notifyListeners();
+    try {
+      _withdrawals = await _appRepository.getWithdrawalsHistory();
+    } catch (e) {
+      print('Error fetching agent withdrawals: $e');
+    } finally {
+      _isWithdrawalsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> submitWithdrawal({
+    required int coinsAmount,
+    required double cashAmount,
+    required String method,
+    required Map<String, dynamic> payoutDetails,
+  }) async {
+    if (_coins < coinsAmount) {
+      _setError('Insufficient coins balance for withdrawal.');
+      return {'success': false, 'message': 'Insufficient coins balance.'};
+    }
+
+    _isWithdrawalsLoading = true;
+    _setError(null);
+    notifyListeners();
+
+    try {
+      // 1. Deduct coins on backend and locally
+      await _appRepository.deductCoins(coinsAmount);
+
+      // 2. Register withdrawal request
+      final result = await _appRepository.requestWithdrawal(
+        coinsAmount: coinsAmount,
+        cashAmount: cashAmount,
+        method: method,
+        payoutDetails: payoutDetails,
+      );
+
+      // 3. Record in local wallet transactions
+      final tx = {
+        'id': 'tx_wd_${DateTime.now().millisecondsSinceEpoch}',
+        'title': 'Withdrawal: $method',
+        'subtitle': 'Ref: ${result['reference_id'] ?? 'Pending'}',
+        'amount': '-$coinsAmount Coins',
+        'type': 'debit',
+        'date': 'Today',
+        'status': 'pending',
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      await _appRepository.saveLocalTransaction(tx);
+
+      // 4. Reload states
+      await fetchCoins();
+      await fetchWithdrawals();
+      await fetchTransactions();
+
+      return {
+        'success': true,
+        'reference_id': result['reference_id'] ?? result['id'],
+        'withdrawal': result,
+      };
+    } catch (e) {
+      _setError(e.toString().replaceAll('Exception: ', ''));
+      return {'success': false, 'message': e.toString()};
+    } finally {
+      _isWithdrawalsLoading = false;
       notifyListeners();
     }
   }
@@ -606,6 +758,7 @@ class SignUpViewModel extends ChangeNotifier {
     _agentStatus = 'none';
     _isAgentMode = false;
     _agentTransactions = [];
+    _withdrawals = [];
     _transactionsError = null;
     _agentDashboardData = null;
     notifyListeners();

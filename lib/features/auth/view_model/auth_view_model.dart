@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../helpers/sp_helper.dart';
 import '../../../models/auth_models.dart';
 import '../../../providers/view_model.dart';
 import '../../../services/auth_api_service.dart';
@@ -55,7 +56,12 @@ class AuthViewModel extends ViewModel {
     });
 
     if (result == true && context.mounted) {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+      final isAgent = await SpHelper.getIsAgent();
+      if (isAgent) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.agentDashboard);
+      } else {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+      }
       return true;
     }
     return false;
@@ -106,7 +112,12 @@ class AuthViewModel extends ViewModel {
     });
 
     if (result == true && context.mounted) {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+      final isAgent = await SpHelper.getIsAgent();
+      if (isAgent) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.agentDashboard);
+      } else {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+      }
       return true;
     }
     return false;

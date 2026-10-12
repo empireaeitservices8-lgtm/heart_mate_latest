@@ -58,9 +58,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void dispose() {
     _stopRingtone();
-    if (_callVM.status == CallStatus.cancelled ||
-        _callVM.status == CallStatus.rejected ||
-        _callVM.status == CallStatus.missed) {
+    if (!_callVM.isCallActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _callVM.resetToIdle();
       });

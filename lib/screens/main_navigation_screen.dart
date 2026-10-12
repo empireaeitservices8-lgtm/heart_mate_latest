@@ -7,6 +7,8 @@ import 'profile.screen.dart';
 import 'signup/view_model/signup_viewmodel.dart';
 import '../core/services/permission_service.dart';
 
+import 'agent/agent_wallet_screen.dart';
+
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
 
@@ -17,34 +19,25 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
-  late final List<Widget> _screens;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       PermissionService.requestAppPermissions();
     });
-    _screens = [
-      HomeScreen(
-        onTabSwitch: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-          _refreshData(index);
-        },
-      ),
-      const WalletTab(),
-      const MyProfileScreen(isEmbedded: true),
-    ];
   }
 
   void _refreshData(int index) {
     final viewModel = Provider.of<SignUpViewModel>(context, listen: false);
     if (index == 1) {
       viewModel.fetchCoins();
-      viewModel.fetchOffers();
-      viewModel.fetchTransactions();
+      if (viewModel.isAgentMode) {
+        viewModel.fetchWithdrawals();
+        viewModel.fetchTransactions();
+      } else {
+        viewModel.fetchOffers();
+        viewModel.fetchTransactions();
+      }
     } else if (index == 2) {
       viewModel.fetchCoins();
       viewModel.fetchProfile();
@@ -216,11 +209,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final viewModel = Provider.of<SignUpViewModel>(context);
+    final screens = [
+      HomeScreen(
+        onTabSwitch: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+          _refreshData(index);
+        },
+      ),
+      viewModel.isAgentMode ? const AgentWalletScreen() : const WalletTab(),
+      const MyProfileScreen(isEmbedded: true),
+    ];
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundObsidian,
       body: IndexedStack(
         index: _currentIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: _buildCustomNavBar(),
     );

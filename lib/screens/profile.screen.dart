@@ -179,27 +179,70 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      if (!viewModel.isAgentMode) ...[
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.monetization_on_rounded,
-                                              color: AppTheme.accentGold,
-                                              size: 16,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '${viewModel.coins} Coins',
-                                              style: const TextStyle(
-                                                color: AppTheme.textSecondary,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
+                                       if (viewModel.isAgentMode) ...[
+                                         const SizedBox(height: 8),
+                                         Row(
+                                           children: [
+                                             Container(
+                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                               decoration: BoxDecoration(
+                                                 color: AppTheme.accentRose.withOpacity(0.12),
+                                                 borderRadius: BorderRadius.circular(10),
+                                                 border: Border.all(color: AppTheme.accentRose.withOpacity(0.3)),
+                                               ),
+                                               child: const Row(
+                                                 children: [
+                                                   Icon(Icons.verified_rounded, color: AppTheme.accentRose, size: 13),
+                                                   SizedBox(width: 4),
+                                                   Text(
+                                                     'Verified Agent',
+                                                     style: TextStyle(
+                                                       color: AppTheme.accentRose,
+                                                       fontSize: 11,
+                                                       fontWeight: FontWeight.bold,
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ),
+                                             ),
+                                             const SizedBox(width: 8),
+                                             const Icon(
+                                               Icons.monetization_on_rounded,
+                                               color: AppTheme.accentGold,
+                                               size: 16,
+                                             ),
+                                             const SizedBox(width: 4),
+                                             Text(
+                                               '₹${viewModel.coins}.00',
+                                               style: const TextStyle(
+                                                 color: AppTheme.textPrimary,
+                                                 fontSize: 14,
+                                                 fontWeight: FontWeight.bold,
+                                               ),
+                                             ),
+                                           ],
+                                         ),
+                                       ] else ...[
+                                         const SizedBox(height: 8),
+                                         Row(
+                                           children: [
+                                             const Icon(
+                                               Icons.monetization_on_rounded,
+                                               color: AppTheme.accentGold,
+                                               size: 16,
+                                             ),
+                                             const SizedBox(width: 4),
+                                             Text(
+                                               '${viewModel.coins} Coins',
+                                               style: const TextStyle(
+                                                 color: AppTheme.textSecondary,
+                                                 fontSize: 14,
+                                                 fontWeight: FontWeight.bold,
+                                               ),
+                                             ),
+                                           ],
+                                         ),
+                                       ],
                                       GestureDetector(
                                         onTap: () {
                                           Navigator.push(
@@ -364,17 +407,68 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                               child: Column(
                                 children: [
                                   if (viewModel.isAgentMode) ...[
-                                    _buildSwitchOptionTile(
-                                      icon: Icons.sync_alt_rounded,
-                                      iconColor: AppTheme.accentRose,
-                                      title: 'Agent Mode Active',
-                                      value: viewModel.isAgentMode,
-                                      onChanged: (val) {
-                                        viewModel.toggleAgentMode(false);
-                                        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-                                      },
-                                      isLast: true,
-                                    ),
+                                     _buildSwitchOptionTile(
+                                       icon: Icons.online_prediction_rounded,
+                                       iconColor: Colors.greenAccent,
+                                       title: 'Online Availability',
+                                       value: user.isOnline,
+                                       onChanged: (val) {
+                                         viewModel.toggleOnlineStatus();
+                                       },
+                                       isLast: false,
+                                     ),
+                                     _buildOptionTile(
+                                       icon: Icons.account_balance_wallet_rounded,
+                                       iconColor: AppTheme.accentRose,
+                                       title: 'Agent Wallet & Withdrawals',
+                                       isLast: false,
+                                       onTap: () {
+                                         Navigator.pushNamed(context, '/agent-wallet');
+                                       },
+                                     ),
+                                     _buildOptionTile(
+                                       icon: Icons.phone_callback_rounded,
+                                       iconColor: Colors.blueAccent,
+                                       title: 'Call History',
+                                       isLast: false,
+                                       onTap: () {
+                                         Navigator.pushNamed(context, '/call-history');
+                                       },
+                                     ),
+                                     _buildOptionTile(
+                                       icon: Icons.verified_user_rounded,
+                                       iconColor: Colors.tealAccent,
+                                       title: 'Privacy Policy',
+                                       isLast: false,
+                                       onTap: () {
+                                         Navigator.push(
+                                           context,
+                                           MaterialPageRoute(
+                                             builder: (context) =>
+                                                 const ContentDetailScreen(
+                                                   type: 'privacy',
+                                                 ),
+                                           ),
+                                         );
+                                       },
+                                     ),
+                                     _buildOptionTile(
+                                       icon: Icons.description_rounded,
+                                       iconColor: Colors.amberAccent,
+                                       title: 'Terms and Conditions',
+                                       isLast: false,
+                                       onTap: () {
+                                         Navigator.push(
+                                           context,
+                                           MaterialPageRoute(
+                                             builder: (context) =>
+                                                 const ContentDetailScreen(
+                                                   type: 'terms',
+                                                 ),
+                                           ),
+                                         );
+                                       },
+                                     ),
                                   ] else ...[
                                     _buildSwitchOptionTile(
                                       icon: Icons.online_prediction_rounded,

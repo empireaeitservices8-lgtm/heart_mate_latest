@@ -96,6 +96,20 @@ class SpHelper {
     return prefs.getString(_keyLanguage);
   }
 
+  static const String keyIsAgent = 'is_agent_mode';
+
+  // ---------------- Agent Mode ----------------
+  static Future<bool> setIsAgent(bool isAgent) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_agent', isAgent);
+    return prefs.setBool(keyIsAgent, isAgent);
+  }
+
+  static Future<bool> getIsAgent() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(keyIsAgent) ?? prefs.getBool('is_agent') ?? false;
+  }
+
   // ---------------- Clear / Logout ----------------
   static Future<bool> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
@@ -103,6 +117,13 @@ class SpHelper {
     await prefs.remove(_keyIsLogged);
     await prefs.remove(_keyUserId);
     await prefs.remove(_keyUsername);
+    await prefs.remove(keyIsAgent);
+    await prefs.remove('is_agent');
+    await prefs.remove('agent_status');
+    await prefs.remove('agent_registration_data');
+    await prefs.remove('agent_registration_date');
+    await prefs.remove('wallet_transactions');
+    await prefs.remove('agent_withdrawals');
     return true;
   }
 

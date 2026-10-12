@@ -63,9 +63,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
     } catch (e) {
       print('Error disposing audio player: $e');
     }
-    if (_callVM.status == CallStatus.cancelled ||
-        _callVM.status == CallStatus.rejected ||
-        _callVM.status == CallStatus.ended) {
+    if (!_callVM.isCallActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _callVM.resetToIdle();
       });
@@ -92,11 +90,11 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
             Navigator.pushReplacementNamed(context, '/active-call');
           }
         });
-      } else if (callVM.status == CallStatus.idle ||
-          callVM.status == CallStatus.cancelled ||
-          callVM.status == CallStatus.rejected ||
-          callVM.status == CallStatus.ended) {
+      } else if (callVM.status != CallStatus.outgoing) {
         _hasNavigated = true;
+        try {
+          _audioPlayer?.stop();
+        } catch (_) {}
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             if (Navigator.canPop(context)) {

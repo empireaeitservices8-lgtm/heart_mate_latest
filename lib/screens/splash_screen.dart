@@ -7,6 +7,8 @@ import '../models/call.dart';
 import '../core/services/storage_service.dart';
 import '../core/services/permission_service.dart';
 
+import '../helpers/sp_helper.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -21,13 +23,15 @@ class _SplashScreenState extends State<SplashScreen> {
     // Navigate to the next screen after 3 seconds
     Timer(const Duration(seconds: 3), () async {
       final storageService = StorageService();
-      final loggedIn = await storageService.isLoggedIn();
+      final loggedIn = await storageService.isLoggedIn() || await SpHelper.getIsLoggedIn();
+      final token = await SpHelper.getToken() ?? await storageService.getToken();
+      final isAuth = loggedIn || (token != null && token.isNotEmpty);
       if (!mounted) return;
 
-      if (loggedIn) {
+      if (isAuth) {
         // Pre-fetch profile and coins to ensure state is hydrated on home screen
         final viewModel = Provider.of<SignUpViewModel>(context, listen: false);
-        viewModel.fetchProfile();
+        await viewModel.fetchProfile();
         viewModel.fetchCoins();
 
         // Request permissions before entering Home screen
@@ -41,7 +45,18 @@ class _SplashScreenState extends State<SplashScreen> {
           return;
         }
 
-        Navigator.pushReplacementNamed(context, '/home');
+        // Check whether the logged-in user is an agent (true or false)
+        final bool isAgent = viewModel.profile != null
+            ? viewModel.profile!.isAgent
+            : (await SpHelper.getIsAgent());
+
+        print('[SplashScreen] isAgent: $isAgent (profile isAgent: ${viewModel.profile?.isAgent}, isAgentMode: ${viewModel.isAgentMode})');
+
+        if (isAgent) {
+          Navigator.pushReplacementNamed(context, '/agent-dashboard');
+        } else {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
       } else {
         Navigator.pushReplacementNamed(context, '/signup');
       }
